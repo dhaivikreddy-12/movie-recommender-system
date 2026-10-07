@@ -1,41 +1,39 @@
-"""Generate a synthetic movie ratings dataset."""
+"""Download the real MovieLens ml-latest-small dataset and cache it locally."""
+import io
 import os
-import numpy as np
+import urllib.request
+import zipfile
+
 import pandas as pd
 
-rng = np.random.default_rng(2025)
+ZIP_URL = "https://files.grouplens.org/datasets/movielens/ml-latest-small.zip"
+RATINGS_CSV = "data/ratings.csv"
+MOVIES_CSV = "data/movies.csv"
 
-n_users = 200
-n_movies = 150
 
-rng_u = rng.normal(0, 0.5, (n_users, 10))
-rng_m = rng.normal(0, 0.5, (n_movies, 10))
-user_bias = rng.normal(0, 0.4, n_users)
-movie_bias = rng.normal(0, 0.4, n_movies)
+def load(min_rating=0):
+    """Return (ratings, movies). min_rating filters to that rating or higher."""
+    if not (os.path.exists(RATINGS_CSV) and os.path.exists(MOVIES_CSV)):
+        req = urllib.request.Request(ZIP_URL, headers={"User-Agent": "Mozilla/5.0"})
+        payload = urllib.request.urlopen(req, timeout=180).read()
+        zf = zipfile.ZipFile(io.BytesIO(payload))
+        os.makedirs("data", exist_ok=True)
+        with zf.open("ml-latest-small/ratings.csv") as fh:
+            with open(RATINGS_CSV, "wb") as out:
+                out.write(fh.read())
+        with zf.open("ml-latest-small/movies.csv") as fh:
+            with open(MOVIES_CSV, "wb") as out:
+                out.write(fh.read())
 
-ratings = []
-for user_id in range(n_users):
-    n_rated = rng.integers(20, 80)
-    movie_ids = rng.choice(n_movies, n_rated, replace=False)
-    for movie_id in movie_ids:
-        pred = 3.5 + user_bias[user_id] + movie_bias[movie_id] \
-               + float(rng_u[user_id] @ rng_m[movie_id])
-        rating = pred + rng.normal(0, 0.35)
-        rating = int(np.clip(round(rating), 1, 5))
-        ts = rng.integers(1600000000, 1700000000)
-        ratings.append((user_id, movie_id, rating, ts))
+    ratings = pd.read_csv(RATINGS_CSV)
+    movies = pd.read_csv(MOVIES_CSV)
+    if min_rating:
+        ratings = ratings[ratings["rating"] >= min_rating]
+    return ratings, movies
 
-df = pd.DataFrame(ratings, columns=["user_id", "movie_id", "rating", "timestamp"])
-df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-os.makedirs("data", exist_ok=True)
-df.to_csv("data/ratings.csv", index=False)
-
-titles = [f"Movie {i+1}" for i in range(n_movies)]
-movies_df = pd.DataFrame({"movie_id": range(n_movies), "title": titles})
-movies_df.to_csv("data/movies.csv", index=False)
-
-print(f"Generated {len(df)} ratings across {n_users} users and {n_movies} movies.")
-print(df.head())
-print("\nRating distribution:")
-print(df["rating"].value_counts().sort_index())
+if __name__ == "__main__":
+    r, m = load()
+    print(f"Ratings: {len(r)} | Users: {r.userId.nunique()} | Movies: {r.movieId.nunique()}")
+    print(r.head())
+    print(f"\nRating distribution:\n{r['rating'].value_counts().sort_index()}")

@@ -1,5 +1,12 @@
 ﻿__pycache__/
 *.pyc
-saved/
+.pytest_cache/
+
+# Datasets are downloaded automatically on first run
+data/
+
+# Generated artefacts
 plots/
+saved/
+*.png
 

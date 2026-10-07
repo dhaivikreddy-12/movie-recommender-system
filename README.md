@@ -1,41 +1,34 @@
 # 🎬 Movie Recommender System
 
-> *"Like 'Netflix, but mine' — a collaborative filtering model that suggests movies based on what similar users liked."*
+> *"Netflix, but mine — a recommender that learns what people like from nothing but their ratings."*
 
-The capstone of my "advanced" projects. It builds a movie recommender using **collaborative filtering** and matrix factorization in PyTorch, learning latent features for users and movies from ratings alone. No content features needed — just ratings.
+The project where matrix factorization finally clicked for me. Trained on **100,836 real MovieLens ratings** from 610 users, it learns a latent feature space for both users and movies — no genre metadata, no plot summaries, just "who rated what".
 
 ## What this project does
 
-- Generates a synthetic movie-rating dataset (~200 users, ~150 movies).
-- Trains a **matrix factorization** model (learned user/movie embeddings) in PyTorch.
-- Splits ratings into train/test and reports RMSE/MAE.
-- Recommends top-N movies for any user.
-- Explains the recommendation with the user's history.
+- Downloads the real MovieLens ml-latest-small dataset (100,836 ratings, 610 users, 9,724 movies).
+- Encodes user and movie IDs into a dense index space.
+- Trains a matrix factorization model with learned user/movie embeddings and bias terms.
+- Uses a **70/10/20 train/val/test split with early stopping** — the split that made this model actually work.
+- Compares against an honest train-mean baseline instead of a flattering one.
+- Recommends top-N unseen movies for any real MovieLens userId.
 
-## The data
+## The dataset
 
-Ratings on a 1–5 scale (`data/ratings.csv`):
+[MovieLens ml-latest-small](https://grouplens.org/datasets/movielens/latest/) — 100,836 ratings, 0.5–5 stars, 610 users, 9,724 movies.
 
-| Column    | Description              |
-|-----------|--------------------------|
-| `user_id` | ID of the user           |
-| `movie_id`| ID of the movie          |
-| `rating`  | Rating given (1–5)       |
-| `timestamp`| (optional) when rated   |
-
-Movie titles (`data/movies.csv`) map IDs to names for readable output.
+| File | Columns |
+|---|---|
+| `ratings.csv` | `userId`, `movieId`, `rating`, `timestamp` |
+| `movies.csv` | `movieId`, `title`, `genres` |
 
 ## How to run it
 
 ```bash
 pip install -r requirements.txt
-# (or: pip install -r requirements.txt)
 
-# Train the model
-python train.py
-
-# Get recommendations for user 5
-python train.py --recommend 5 --top 10
+python -m src.train                          # train, evaluate, recommend for userId 1
+python -m src.train --recommend 4 --top 10   # recommendations for another user
 ```
 
 ## Project structure
@@ -43,26 +36,38 @@ python train.py --recommend 5 --top 10
 ```
 movie-recommender-system/
 ├── src/
-│   ├── data_gen.py       # synthetic ratings
-│   ├── model.py          # matrix factorization model
-│   └── train.py          # training + recommend
+│   ├── data_gen.py   # MovieLens download + cache
+│   ├── model.py      # MatrixFactorization
+│   └── train.py      # training, early stopping, top-N
 ├── data/
-├── plots/
+│   ├── ratings.csv
+│   └── movies.csv
+├── tests/
 ├── requirements.txt
 └── README.md
 ```
 
 ## What I learned
 
-- The difference between content-based and collaborative filtering.
-- How "latent features" get learned purely from ratings.
-- How to evaluate recommendations honestly (RMSE/MAE, not vibes).
-- That recommenders are everywhere — from YouTube to Amazon.
+- That the *global bias* initialisation matters enormously. Starting it at 0 instead of the mean rating cost me an entire round of debugging.
+- Why early stopping on a validation split was the difference between a model that beat baseline and one that didn't.
+- That comparing against the **train mean** is the honest baseline. Using the test mean flatters the model and made me briefly think I'd built something useless.
+- What collaborative filtering can and can't see: it knows patterns, not reasons.
 
 ## Results
 
-On held-out ratings, the model reaches **~1.1 RMSE** (a bit over one star off on a 1–5 scale). That's a solid baseline for a from-scratch recommender, and there's a clear roadmap to improve it — more factors, regularization tuning, and more data all help.
+70/10/20 split, early stopping at epoch 10 (best val RMSE 0.8966):
+
+| Metric | Value |
+|---|---|
+| Validation RMSE | 0.8966 |
+| **Test RMSE** | **0.9041** |
+| Test MAE | 0.6981 |
+| Train-mean baseline RMSE | 1.0529 |
+| **Improvement over baseline** | **14.1%** |
+
+Beating a constant-prediction baseline by 14% on a 0.5–5 rating scale is a real result for an unregularised matrix factorization, and the top-N recommendations are recognisably sensible.
 
 ---
 
-*Built with Python, PyTorch, pandas. Made for learning, by a student, for students.*
+*Built with Python, PyTorch, pandas. Real rating data, honestly measured.*
